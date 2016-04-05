@@ -63,6 +63,15 @@ const char *libxl__domain_device_model(libxl__gc *gc,
     return dm;
 }
 
+const libxl_display_info *libxl__dm_display(const libxl_domain_config *guest_config)
+{
+	const libxl_display_info *display = NULL;
+	if (guest_config->b_info.type == LIBXL_DOMAIN_TYPE_HVM)
+		display = &guest_config->b_info.u.hvm.display;
+	return display;	
+	
+}
+
 const libxl_vnc_info *libxl__dm_vnc(const libxl_domain_config *guest_config)
 {
     const libxl_vnc_info *vnc = NULL;
@@ -285,7 +294,7 @@ static char ** libxl__build_device_model_args_old(libxl__gc *gc,
     }
     for (i = 0; b_info->extra && b_info->extra[i] != NULL; i++)
         flexarray_append(dm_args, b_info->extra[i]);
-    flexarray_append(dm_args, "-M");
+    flexarray_append(dm_args, "-machine");
     switch (b_info->type) {
     case LIBXL_DOMAIN_TYPE_PV:
         flexarray_append(dm_args, "xenpv");
@@ -293,7 +302,7 @@ static char ** libxl__build_device_model_args_old(libxl__gc *gc,
             flexarray_append(dm_args, b_info->extra_pv[i]);
         break;
     case LIBXL_DOMAIN_TYPE_HVM:
-        flexarray_append(dm_args, "xenfv");
+        flexarray_append(dm_args, "xenfv,max-ram-below-4g=0xf0000000");
         for (i = 0; b_info->extra_hvm && b_info->extra_hvm[i] != NULL; i++)
             flexarray_append(dm_args, b_info->extra_hvm[i]);
         break;
@@ -365,6 +374,7 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
     const int num_disks = guest_config->num_disks;
     const int num_nics = guest_config->num_nics;
     const libxl_vnc_info *vnc = libxl__dm_vnc(guest_config);
+	const libxl_display_info *display = libxl__dm_display(guest_config);
     const libxl_sdl_info *sdl = dm_sdl(guest_config);
     const char *keymap = dm_keymap(guest_config);
     flexarray_t *dm_args;
@@ -377,14 +387,14 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
                       "-xen-domid",
                       libxl__sprintf(gc, "%d", guest_domid), NULL);
 
-    flexarray_append(dm_args, "-chardev");
-    flexarray_append(dm_args,
-                     libxl__sprintf(gc, "socket,id=libxl-cmd,"
-                                    "path=%s/qmp-libxl-%d,server,nowait",
-                                    libxl__run_dir_path(), guest_domid));
+    //flexarray_append(dm_args, "-chardev");
+    //flexarray_append(dm_args,
+    //                 libxl__sprintf(gc, "socket,id=libxl-cmd,"
+    //                                "path=%s/qmp-libxl-%d,server,nowait",
+    //                                libxl__run_dir_path(), guest_domid));
 
-    flexarray_append(dm_args, "-mon");
-    flexarray_append(dm_args, "chardev=libxl-cmd,mode=control");
+    //flexarray_append(dm_args, "-mon");
+    //flexarray_append(dm_args, "chardev=libxl-cmd,mode=control");
 
     if (b_info->type == LIBXL_DOMAIN_TYPE_PV) {
         flexarray_append(dm_args, "-xen-attach");
@@ -443,7 +453,10 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
      * Ensure that by default no display backend is created. Further
      * options given below might then enable more.
      */
-    flexarray_append_pair(dm_args, "-display", "none");
+	if (display)
+		flexarray_append_pair(dm_args, "-display", display->kind);
+	else
+	    flexarray_append_pair(dm_args, "-display", "none");
 
     if (sdl) {
         flexarray_append(dm_args, "-sdl");
@@ -462,7 +475,7 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
         int ioemu_nics = 0;
 
         /* Disable useless empty floppy drive */
-        flexarray_vappend(dm_args, "-global", "isa-fdc.driveA=", NULL);
+        //flexarray_vappend(dm_args, "-global", "isa-fdc.driveA=", NULL);
 
         if (b_info->u.hvm.serial) {
             flexarray_vappend(dm_args, "-serial", b_info->u.hvm.serial, NULL);
@@ -587,7 +600,7 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
     }
     for (i = 0; b_info->extra && b_info->extra[i] != NULL; i++)
         flexarray_append(dm_args, b_info->extra[i]);
-    flexarray_append(dm_args, "-M");
+    flexarray_append(dm_args, "-machine");
     switch (b_info->type) {
     case LIBXL_DOMAIN_TYPE_PV:
         flexarray_append(dm_args, "xenpv");
@@ -595,7 +608,7 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
             flexarray_append(dm_args, b_info->extra_pv[i]);
         break;
     case LIBXL_DOMAIN_TYPE_HVM:
-        flexarray_append(dm_args, "xenfv");
+        flexarray_append(dm_args, "xenfv,max-ram-below-4g=0xf0000000");
         for (i = 0; b_info->extra_hvm && b_info->extra_hvm[i] != NULL; i++)
             flexarray_append(dm_args, b_info->extra_hvm[i]);
         break;

@@ -1309,6 +1309,8 @@ _hidden int libxl__wait_for_device_model(libxl__gc *gc,
 
 _hidden int libxl__destroy_device_model(libxl__gc *gc, uint32_t domid);
 
+_hidden const libxl_display_info *libxl__dm_display(const libxl_domain_config *g_cfg);
+
 _hidden const libxl_vnc_info *libxl__dm_vnc(const libxl_domain_config *g_cfg);
 
 _hidden char *libxl__abs_path(libxl__gc *gc, const char *s, const char *path);

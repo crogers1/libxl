@@ -1464,6 +1464,15 @@ skip_vfb:
             b_info->u.hvm.vga.kind = l ? LIBXL_VGA_INTERFACE_TYPE_STD :
                                          LIBXL_VGA_INTERFACE_TYPE_CIRRUS;
 
+		if (!xlu_cfg_get_string(config, "display", &buf, 0)) {
+			char *dispstr = "dhqemu";
+			if (!strcmp(buf, dispstr)) {
+				b_info->u.hvm.display.kind = strdup(dispstr);
+			} else {
+				fprintf(stderr, "Unknown display \"%s\" specified\n", buf);
+				exit(1);
+			}
+		}
         xlu_cfg_get_defbool(config, "vnc", &b_info->u.hvm.vnc.enable, 0);
         xlu_cfg_replace_string (config, "vnclisten",
                                 &b_info->u.hvm.vnc.listen, 0);
