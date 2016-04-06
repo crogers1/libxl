@@ -21,6 +21,8 @@
 const char *libxl_basename(const char *name); /* returns string from strdup */
 unsigned long libxl_get_required_shadow_memory(unsigned long maxmem_kb, unsigned int smp_cpus);
 int libxl_name_to_domid(libxl_ctx *ctx, const char *name, uint32_t *domid);
+int libxl_uuid_to_domid(libxl_ctx *ctx, const char *uuid, int32_t *domid);
+int libxl_get_acpi_state(libxl_ctx *ctx, int32_t domid, uint32_t * acpi_state);
 int libxl_domain_qualifier_to_domid(libxl_ctx *ctx, const char *name, uint32_t *domid);
 char *libxl_domid_to_name(libxl_ctx *ctx, uint32_t domid);
 int libxl_name_to_cpupoolid(libxl_ctx *ctx, const char *name, uint32_t *poolid);
@@ -30,7 +32,7 @@ int libxl_get_stubdom_id(libxl_ctx *ctx, int guest_domid);
 int libxl_is_stubdom(libxl_ctx *ctx, uint32_t domid, uint32_t *target_domid);
 int libxl_create_logfile(libxl_ctx *ctx, const char *name, char **full_name);
 int libxl_string_to_backend(libxl_ctx *ctx, char *s, libxl_disk_backend *backend);
-
+int libxl_update_state(libxl_ctx *ctx, uint32_t domid_in, const char *state);
 int libxl_read_file_contents(libxl_ctx *ctx, const char *filename,
                              void **data_r, int *datalen_r);
   /* Reads the contents of the plain file filename into a mallocd

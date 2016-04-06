@@ -264,6 +264,7 @@ libxl_domain_sched_params = Struct("domain_sched_params",[
 
 libxl_domain_build_info = Struct("domain_build_info",[
     ("max_vcpus",       integer),
+    ("stubdom",       integer),
     ("avail_vcpus",     libxl_bitmap),
     ("cpumap",          libxl_bitmap),
     ("nodemap",         libxl_bitmap),
@@ -319,7 +320,7 @@ libxl_domain_build_info = Struct("domain_build_info",[
                                        ("nographic",        libxl_defbool),
                                        ("vga",              libxl_vga_interface_info),
                                        ("vnc",              libxl_vnc_info),
-									   ("display",          libxl_display_info),
+									   ("dm_display",          libxl_display_info),
                                        # keyboard layout, default is en-us keyboard
                                        ("keymap",           string),
                                        ("sdl",              libxl_sdl_info),

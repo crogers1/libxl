@@ -850,6 +850,7 @@ int libxl_domain_unpause(libxl_ctx *ctx, uint32_t domid)
         }
     }
     ret = xc_domain_unpause(ctx->xch, domid);
+	libxl_update_state(ctx, domid, "running");
     if (ret<0) {
         LIBXL__LOG_ERRNO(ctx, LIBXL__LOG_ERROR, "unpausing domain %d", domid);
         rc = ERROR_FAIL;
@@ -2946,6 +2947,8 @@ void libxl__device_nic_add(libxl__egc *egc, uint32_t domid,
     aodev->action = LIBXL__DEVICE_ACTION_ADD;
     libxl__wait_device_connection(egc, aodev);
 
+	libxl__xs_write(gc, XBT_NULL, GCSPRINTF("%s/hotplug-status",libxl__device_backend_path(gc, device)), "connected"); 
+	
     rc = 0;
 out:
     aodev->rc = rc;
@@ -3397,6 +3400,7 @@ int libxl__device_vfb_add(libxl__gc *gc, uint32_t domid, libxl_device_vfb *vfb)
                               libxl__xs_kvs_of_flexarray(gc, back, back->count),
                               libxl__xs_kvs_of_flexarray(gc, front, front->count),
                               NULL);
+	libxl__xs_write(gc, XBT_NULL, GCSPRINTF("%s/hotplug-status",libxl__device_backend_path(gc, &device)), "connected"); 
     rc = 0;
 out:
     return rc;
@@ -4654,10 +4658,37 @@ int libxl_domain_sched_params_get(libxl_ctx *ctx, uint32_t domid,
     return ret;
 }
 
+static int libxl__domain_s3_resume(libxl__gc *gc, int domid)
+{
+    int rc = 0;
+
+    switch (libxl__domain_type(gc, domid)) {
+    case LIBXL_DOMAIN_TYPE_HVM:
+        switch (libxl__device_model_version_running(gc, domid)) {
+        case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN_TRADITIONAL:
+            rc = xc_set_hvm_param(CTX->xch, domid, HVM_PARAM_ACPI_S_STATE, 0);
+            break;
+        case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN:
+            rc = libxl__qmp_system_wakeup(gc, domid);
+            break;
+        default:
+            rc = ERROR_INVAL;
+            break;
+        }
+        break;
+    default:
+        rc = ERROR_INVAL;
+        break;
+    }
+
+    return rc;
+}
+
 int libxl_send_trigger(libxl_ctx *ctx, uint32_t domid,
                        libxl_trigger trigger, uint32_t vcpuid)
 {
     int rc;
+    GC_INIT(ctx);
 
     switch (trigger) {
     case LIBXL_TRIGGER_POWER:
@@ -4681,8 +4712,7 @@ int libxl_send_trigger(libxl_ctx *ctx, uint32_t domid,
                                     XEN_DOMCTL_SENDTRIGGER_RESET, vcpuid);
         break;
     case LIBXL_TRIGGER_S3RESUME:
-        xc_set_hvm_param(ctx->xch, domid, HVM_PARAM_ACPI_S_STATE, 0);
-        rc = 0;
+        rc = libxl__domain_s3_resume(gc, domid);
         break;
     default:
         rc = -1;
@@ -4697,6 +4727,7 @@ int libxl_send_trigger(libxl_ctx *ctx, uint32_t domid,
         rc = ERROR_FAIL;
     }
 
+    GC_FREE;
     return rc;
 }
 

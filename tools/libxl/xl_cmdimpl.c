@@ -548,9 +548,9 @@ static void parse_config_data(const char *config_source,
 
 {
     const char *buf;
-    long l;
+    long l, vkb_flag, vfb_flag;
     XLU_Config *config;
-    XLU_ConfigList *cpus, *vbds, *nics, *pcis, *cvfbs, *cpuids, *vtpms;
+    XLU_ConfigList *cpus, *vbds, *nics, *pcis, *cpuids, *vtpms;
     XLU_ConfigList *ioports, *irqs, *iomem;
     int num_ioports, num_irqs, num_iomem;
     int pci_power_mgmt = 0;
@@ -670,6 +670,9 @@ static void parse_config_data(const char *config_source,
 
     if (!xlu_cfg_get_long (config, "maxvcpus", &l, 0))
         b_info->max_vcpus = l;
+
+	if (!xlu_cfg_get_long (config, "stubdom", &l, 0))
+		b_info->stubdom = l;
 
     if (!xlu_cfg_get_list (config, "cpus", &cpus, 0, 1)) {
         int n_cpus = 0;
@@ -1199,7 +1202,42 @@ skip_nic:
         fprintf(stderr, "WARNING: vif2: netchannel2 is deprecated and not supported by xl\n");
     }
 
-    if (!xlu_cfg_get_list (config, "vfb", &cvfbs, 0, 0)) {
+	//Support adding vkbs by themselves
+	if (!xlu_cfg_get_long (config, "vkb", &vkb_flag, 0)){
+		d_config->num_vkbs = 0;
+		d_config->vkbs = NULL;
+		
+		if (vkb_flag == 1) {
+			for(i = 0; i < 2; i++) {
+				libxl_device_vkb *vkb;
+				fprintf(stderr, "WARNING: init vkb device\n");
+				d_config->vkbs = (libxl_device_vkb *) realloc(d_config->vkbs, sizeof(libxl_device_vkb) * (d_config->num_vkbs + 1));
+				vkb = d_config->vkbs + d_config->num_vkbs;
+				libxl_device_vkb_init(vkb);
+				vkb->devid = d_config->num_vkbs;
+				fprintf(stderr, "WARNING: vkb device of devid %d created.\n", vkb->devid);
+				d_config->num_vkbs++;
+			}
+		}
+	}
+
+	if (!xlu_cfg_get_long (config, "vfb", &vfb_flag, 0)) {
+		d_config->num_vfbs = 0;
+		d_config->vfbs = NULL;
+	
+		if (vfb_flag == 1) {
+			libxl_device_vfb * vfb;
+			fprintf(stderr, "WARNING: init vfb device\n");
+			d_config->vfbs = (libxl_device_vfb *) realloc(d_config->vfbs, sizeof(libxl_device_vfb) * (d_config->num_vfbs + 1));
+			vfb = d_config->vfbs + d_config->num_vfbs;
+			libxl_device_vfb_init(vfb);
+			vfb->devid = d_config->num_vfbs;
+			fprintf(stderr, "WARNING: vfb device of devid %d created.\n", vfb->devid);
+			d_config->num_vfbs++;
+		}	
+	}
+
+    /*if (!xlu_cfg_get_list (config, "vfb", &cvfbs, 0, 0)) {
         d_config->num_vfbs = 0;
         d_config->num_vkbs = 0;
         d_config->vfbs = NULL;
@@ -1263,7 +1301,7 @@ skip_vfb:
             d_config->num_vfbs++;
             d_config->num_vkbs++;
         }
-    }
+    }*/
 
     if (!xlu_cfg_get_long (config, "pci_msitranslate", &l, 0))
         pci_msitranslate = l;
@@ -1464,12 +1502,15 @@ skip_vfb:
             b_info->u.hvm.vga.kind = l ? LIBXL_VGA_INTERFACE_TYPE_STD :
                                          LIBXL_VGA_INTERFACE_TYPE_CIRRUS;
 
-		if (!xlu_cfg_get_string(config, "display", &buf, 0)) {
-			char *dispstr = "dhqemu";
-			if (!strcmp(buf, dispstr)) {
-				b_info->u.hvm.display.kind = strdup(dispstr);
+		if (!xlu_cfg_get_string(config, "dm_display", &buf, 0)) {
+			char *dhstr = "dhqemu";
+			char *surfstr = "surfman";
+			if (!strcmp(buf, dhstr)) {
+				b_info->u.hvm.dm_display.kind = strdup(dhstr);
+			} else if (!strcmp(buf, surfstr)) {
+				b_info->u.hvm.dm_display.kind = strdup(surfstr);
 			} else {
-				fprintf(stderr, "Unknown display \"%s\" specified\n", buf);
+				fprintf(stderr, "Unknown dm_display \"%s\" specified\n", buf);
 				exit(1);
 			}
 		}
@@ -1997,6 +2038,8 @@ static uint32_t create_domain(struct domain_create *dom_info)
 start:
     assert(domid == INVALID_DOMID);
 
+	//libxl_update_state(ctx, domid, "creating-devices");
+
     rc = acquire_lock();
     if (rc < 0)
         goto error_out;
@@ -2032,6 +2075,7 @@ start:
     if ( ret )
         goto error_out;
 
+	libxl_update_state(ctx, domid, "creating-devices");
     /* If single vcpu to pcpu mapping was requested, honour it */
     if (vcpu_to_pcpu) {
         libxl_bitmap vcpu_cpumap;
@@ -2068,6 +2112,8 @@ start:
     }
 
     release_lock();
+
+	libxl_update_state(ctx, domid, "created");
 
     if (!paused)
         libxl_domain_unpause(ctx, domid);
@@ -2247,6 +2293,7 @@ error_out:
     release_lock();
     if (libxl_domid_valid_guest(domid)) {
         libxl_domain_destroy(ctx, domid, 0);
+		libxl_update_state(ctx, domid, "shutdown");
         domid = INVALID_DOMID;
     }
 
@@ -2921,6 +2968,7 @@ static void shutdown_domain(uint32_t domid,
     int rc;
 
     fprintf(stderr, "Shutting down domain %d\n", domid);
+	libxl_update_state(ctx, domid, "shutdowning");
     rc=libxl_domain_shutdown(ctx, domid);
     if (rc == ERROR_NOPARAVIRT) {
         if (fallback_trigger) {
@@ -2945,6 +2993,7 @@ static void shutdown_domain(uint32_t domid,
             exit(-1);
         }
     }
+	libxl_update_state(ctx, domid, "shutdown");
 }
 
 static void reboot_domain(uint32_t domid, libxl_evgen_domain_death **deathw,
@@ -5389,6 +5438,51 @@ int main_domname(int argc, char **argv)
     free(domname);
 
     return 0;
+}
+
+int main_acpi(int argc, char **argv)
+{
+	int32_t domid; 
+	uint32_t acpi_state;
+	int opt;
+	
+	SWITCH_FOREACH_OPT(opt, "", NULL, "domid", 1) {
+		/* No options */
+	}
+
+	domid = atoi(argv[optind]);
+
+	if (libxl_get_acpi_state(ctx, domid, &acpi_state)) {
+		fprintf(stderr, "Can't get acpi state with domid of '%d', maybe this domain does not exist.\n", domid);
+		return 1;
+	}
+
+	printf("%d\n", acpi_state);
+
+	return 0;
+
+}
+
+int main_uuid(int argc, char **argv)
+{
+	int32_t domid;
+	int opt;
+	char *uuid = NULL;
+	
+	SWITCH_FOREACH_OPT(opt, "", NULL, "uuid", 1) {
+		/* No options */
+	}
+
+	uuid = argv[optind]; 
+
+	if (libxl_uuid_to_domid(ctx, uuid, &domid)){
+		fprintf(stderr, "Can't get domid with domain uuid of '%s', maybe this domain does not exist.\n", uuid);
+		return 1;
+	}
+
+	printf("%d\n", domid);
+
+	return 0;
 }
 
 int main_rename(int argc, char **argv)

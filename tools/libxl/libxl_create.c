@@ -485,9 +485,14 @@ retry_transaction:
                     libxl__sprintf(gc, "%s/control", dom_path),
                     roperm, ARRAY_SIZE(roperm));
     if (info->type == LIBXL_DOMAIN_TYPE_HVM)
+	{
         libxl__xs_mkdir(gc, t,
                         libxl__sprintf(gc, "%s/hvmloader", dom_path),
                         roperm, ARRAY_SIZE(roperm));
+		libxl__xs_write(gc, t,
+						libxl__sprintf(gc, "%s/hvmloader/seabios-legacy-load-roms", dom_path),
+						"1");
+	}
 
     libxl__xs_mkdir(gc, t,
                     libxl__sprintf(gc, "%s/control/shutdown", dom_path),
@@ -1011,7 +1016,7 @@ static void domcreate_launch_dm(libxl__egc *egc, libxl__multidev *multidev,
     case LIBXL_DOMAIN_TYPE_HVM:
     {
         libxl__device_console console;
-        libxl_device_vkb vkb;
+        //libxl_device_vkb vkb;
 
         ret = init_console_info(&console, 0);
         if ( ret )
@@ -1020,9 +1025,9 @@ static void domcreate_launch_dm(libxl__egc *egc, libxl__multidev *multidev,
         libxl__device_console_add(gc, domid, &console, state);
         libxl__device_console_dispose(&console);
 
-        libxl_device_vkb_init(&vkb);
-        libxl__device_vkb_add(gc, domid, &vkb);
-        libxl_device_vkb_dispose(&vkb);
+        //libxl_device_vkb_init(&vkb);
+        //libxl__device_vkb_add(gc, domid, &vkb);
+        //libxl_device_vkb_dispose(&vkb);
 
         dcs->dmss.dm.guest_domid = domid;
         if (libxl_defbool_val(d_config->b_info.device_model_stubdomain))
@@ -1036,18 +1041,26 @@ static void domcreate_launch_dm(libxl__egc *egc, libxl__multidev *multidev,
         int need_qemu = 0;
         libxl__device_console console;
 
+		fprintf(stderr, "WARNING: before adding vkb device.\n");
+		for (i = 0; i < d_config->num_vkbs; i++) {
+			fprintf(stderr, "WARNING: adding vkb device.\n");
+			libxl__device_vkb_add(gc, domid, &d_config->vkbs[i]);
+		}
+
         for (i = 0; i < d_config->num_vfbs; i++) {
+			fprintf(stderr, "WARNING: adding vkb device.\n");
             libxl__device_vfb_add(gc, domid, &d_config->vfbs[i]);
-            libxl__device_vkb_add(gc, domid, &d_config->vkbs[i]);
+            //libxl__device_vkb_add(gc, domid, &d_config->vkbs[i]);
         }
 
         ret = init_console_info(&console, 0);
         if ( ret )
             goto error_out;
 
-        need_qemu = libxl__need_xenpv_qemu(gc, 1, &console,
-                d_config->num_vfbs, d_config->vfbs,
-                d_config->num_disks, &d_config->disks[0]);
+        //need_qemu = libxl__need_xenpv_qemu(gc, 1, &console,
+        //        d_config->num_vfbs, d_config->vfbs,
+        //        d_config->num_disks, &d_config->disks[0]);
+		need_qemu = false;
 
         console.backend_domid = state->console_domid;
         libxl__device_console_add(gc, domid, &console, state);
