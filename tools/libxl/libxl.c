@@ -850,6 +850,7 @@ int libxl_domain_unpause(libxl_ctx *ctx, uint32_t domid)
         }
     }
     ret = xc_domain_unpause(ctx->xch, domid);
+    libxl_update_state(ctx, domid, "running");
     if (ret<0) {
         LIBXL__LOG_ERRNO(ctx, LIBXL__LOG_ERROR, "unpausing domain %d", domid);
         rc = ERROR_FAIL;
@@ -1566,8 +1567,17 @@ static int libxl__primary_console_find(libxl_ctx *ctx, uint32_t domid_vm,
 
     if (stubdomid) {
         *domid = stubdomid;
-        *cons_num = STUBDOM_CONSOLE_SERIAL;
         *type = LIBXL_CONSOLE_TYPE_PV;
+        switch (libxl__stubdomain_version_running(gc, stubdomid)) {
+        case LIBXL_STUBDOMAIN_VERSION_MINIOS:
+            *cons_num = STUBDOM_CONSOLE_SERIAL;
+            break;
+        case LIBXL_STUBDOMAIN_VERSION_LINUX:
+            *cons_num = 1;
+            break;
+        default:
+            abort();
+        }
     } else {
         switch (libxl__domain_type(gc, domid_vm)) {
         case LIBXL_DOMAIN_TYPE_HVM:
@@ -2946,6 +2956,8 @@ void libxl__device_nic_add(libxl__egc *egc, uint32_t domid,
     aodev->action = LIBXL__DEVICE_ACTION_ADD;
     libxl__wait_device_connection(egc, aodev);
 
+    libxl__xs_write(gc, XBT_NULL, GCSPRINTF("%s/hotplug-status",libxl__device_backend_path(gc, device)), "connected"); 
+
     rc = 0;
 out:
     aodev->rc = rc;
@@ -3397,6 +3409,9 @@ int libxl__device_vfb_add(libxl__gc *gc, uint32_t domid, libxl_device_vfb *vfb)
                               libxl__xs_kvs_of_flexarray(gc, back, back->count),
                               libxl__xs_kvs_of_flexarray(gc, front, front->count),
                               NULL);
+    
+    libxl__xs_write(gc, XBT_NULL, GCSPRINTF("%s/hotplug-status",libxl__device_backend_path(gc, &device)), "connected");
+    
     rc = 0;
 out:
     return rc;
@@ -3830,8 +3845,18 @@ int libxl_domain_need_memory(libxl_ctx *ctx, libxl_domain_build_info *b_info,
     switch (b_info->type) {
     case LIBXL_DOMAIN_TYPE_HVM:
         *need_memkb += b_info->shadow_memkb + LIBXL_HVM_EXTRA_MEMORY;
-        if (libxl_defbool_val(b_info->device_model_stubdomain))
-            *need_memkb += 32 * 1024;
+        if (libxl_defbool_val(b_info->device_model_stubdomain)) {
+            switch (b_info->stubdomain_version) {
+            case LIBXL_STUBDOMAIN_VERSION_MINIOS:
+                *need_memkb += 32 * 1024;
+                break;
+            case LIBXL_STUBDOMAIN_VERSION_LINUX:
+                *need_memkb += LIBXL_LINUX_STUBDOM_MEM * 1024;
+                break;
+            default:
+                abort();
+            }
+        }
         break;
     case LIBXL_DOMAIN_TYPE_PV:
         *need_memkb += b_info->shadow_memkb + LIBXL_PV_EXTRA_MEMORY;
@@ -4654,10 +4679,37 @@ int libxl_domain_sched_params_get(libxl_ctx *ctx, uint32_t domid,
     return ret;
 }
 
+static int libxl__domain_s3_resume(libxl__gc *gc, int domid)
+{
+    int rc = 0;
+   
+    switch (libxl__domain_type(gc, domid)) {
+    case LIBXL_DOMAIN_TYPE_HVM:
+        switch (libxl__device_model_version_running(gc, domid)) {
+        case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN_TRADITIONAL:
+            rc = xc_set_hvm_param(CTX->xch, domid, HVM_PARAM_ACPI_S_STATE, 0);
+            break;
+        case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN:
+            rc = libxl__qmp_system_wakeup(gc, domid);
+            break;
+        default:
+            rc = ERROR_INVAL;
+            break;
+        }
+        break;
+    default:
+        rc = ERROR_INVAL;
+        break;
+    }
+    
+    return rc;
+}
+
 int libxl_send_trigger(libxl_ctx *ctx, uint32_t domid,
                        libxl_trigger trigger, uint32_t vcpuid)
 {
     int rc;
+    GC_INIT(ctx);
 
     switch (trigger) {
     case LIBXL_TRIGGER_POWER:
@@ -4681,8 +4733,7 @@ int libxl_send_trigger(libxl_ctx *ctx, uint32_t domid,
                                     XEN_DOMCTL_SENDTRIGGER_RESET, vcpuid);
         break;
     case LIBXL_TRIGGER_S3RESUME:
-        xc_set_hvm_param(ctx->xch, domid, HVM_PARAM_ACPI_S_STATE, 0);
-        rc = 0;
+        rc = libxl__domain_s3_resume(gc, domid);
         break;
     default:
         rc = -1;
@@ -4697,6 +4748,7 @@ int libxl_send_trigger(libxl_ctx *ctx, uint32_t domid,
         rc = ERROR_FAIL;
     }
 
+    GC_FREE;
     return rc;
 }
 

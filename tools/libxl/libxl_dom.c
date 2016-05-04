@@ -965,6 +965,7 @@ int libxl__domain_suspend_device_model(libxl__gc *gc,
     case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN:
         if (libxl__qmp_stop(gc, domid))
             return ERROR_FAIL;
+        libxl_update_state(CTX, domid, "suspending");
         /* Save DM state into filename */
         ret = libxl__qmp_save(gc, domid, filename);
         if (ret)
@@ -1015,6 +1016,8 @@ int libxl__domain_suspend_common_callback(void *user)
         xc_get_hvm_param(CTX->xch, domid, HVM_PARAM_ACPI_S_STATE, &hvm_s_state);
     }
 
+    libxl_update_state(CTX, domid, "suspending");
+    
     if ((hvm_s_state == 0) && (dss->suspend_eventchn >= 0)) {
         LOG(DEBUG, "issuing %s suspend request via event channel",
             dss->hvm ? "PVHVM" : "PV");
@@ -1127,6 +1130,7 @@ int libxl__domain_suspend_common_callback(void *user)
             return 0;
         }
     }
+    libxl_update_state(CTX, domid, "suspended");
     return 1;
 }
 
@@ -1390,6 +1394,7 @@ void libxl__xc_domain_save_done(libxl__egc *egc, void *dss_void,
     rc = 0;
 
 out:
+    libxl_update_state(CTX, dss->domid, "suspended");
     domain_suspend_done(egc, dss, rc);
 }
 

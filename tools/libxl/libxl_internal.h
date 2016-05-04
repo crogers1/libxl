@@ -99,6 +99,7 @@
 #define STUBDOM_CONSOLE_RESTORE 2
 #define STUBDOM_CONSOLE_SERIAL 3
 #define STUBDOM_SPECIAL_CONSOLES 3
+#define LIBXL_LINUX_STUBDOM_MEM 128
 #define TAP_DEVICE_SUFFIX "-emu"
 #define DISABLE_UDEV_PATH "libxl/disable_udev"
 
@@ -1309,6 +1310,8 @@ _hidden int libxl__wait_for_device_model(libxl__gc *gc,
 
 _hidden int libxl__destroy_device_model(libxl__gc *gc, uint32_t domid);
 
+_hidden const libxl_display_info *libxl__dm_display(const libxl_domain_config *g_cfg);
+
 _hidden const libxl_vnc_info *libxl__dm_vnc(const libxl_domain_config *g_cfg);
 
 _hidden char *libxl__abs_path(libxl__gc *gc, const char *s, const char *path);
@@ -1408,6 +1411,8 @@ _hidden int libxl__qmp_query_serial(libxl__qmp_handler *qmp);
 _hidden int libxl__qmp_pci_add(libxl__gc *gc, int d, libxl_device_pci *pcidev);
 _hidden int libxl__qmp_pci_del(libxl__gc *gc, int domid,
                                libxl_device_pci *pcidev);
+/* Resume hvm domain */
+_hidden int libxl__qmp_system_wakeup(libxl__gc *gc, int domid);
 /* Suspend QEMU. */
 _hidden int libxl__qmp_stop(libxl__gc *gc, int domid);
 /* Resume QEMU. */
@@ -1571,6 +1576,9 @@ _hidden libxl__json_object *libxl__json_parse(libxl__gc *gc_opt, const char *s);
 _hidden int libxl__device_model_version_running(libxl__gc *gc, uint32_t domid);
   /* Return the system-wide default device model */
 _hidden libxl_device_model_version libxl__default_device_model(libxl__gc *gc);
+  /* Based on /libxl/$domid/stubdom-version xenstore key
+   * default is minios */
+_hidden int libxl__stubdomain_version_running(libxl__gc *gc, uint32_t domid);
 
 /* Check how executes hotplug script currently */
 int libxl__hotplug_settings(libxl__gc *gc, xs_transaction_t t);

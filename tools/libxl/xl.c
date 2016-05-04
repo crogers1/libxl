@@ -116,7 +116,7 @@ static void parse_global_config(const char *configfile,
         lockfile = strdup(XL_LOCK_FILE);
     }
 
-    if (!lockfile < 0) {
+    if (!lockfile) {
         fprintf(stderr, "failed to allocate lockdir \n");
         exit(1);
     }
