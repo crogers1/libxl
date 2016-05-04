@@ -263,6 +263,7 @@ int libxl__build_post(libxl__gc *gc, uint32_t domid,
     xs_transaction_t t;
     char **ents, **hvm_ents;
     int i, rc;
+    int64_t mem_target_fudge;
 
     rc = libxl_domain_sched_params_set(CTX, domid, &info->sched_params);
     if (rc)
@@ -272,11 +273,17 @@ int libxl__build_post(libxl__gc *gc, uint32_t domid,
     if (info->cpuid != NULL)
         libxl_cpuid_set(ctx, domid, info->cpuid);
 
+    mem_target_fudge =
+        (info->type == LIBXL_DOMAIN_TYPE_HVM &&
+         info->max_memkb > info->target_memkb)
+        ? LIBXL_MAXMEM_CONSTANT : 0;
+
     ents = libxl__calloc(gc, 12 + (info->max_vcpus * 2) + 2, sizeof(char *));
     ents[0] = "memory/static-max";
     ents[1] = GCSPRINTF("%"PRId64, info->max_memkb);
     ents[2] = "memory/target";
-    ents[3] = GCSPRINTF("%"PRId64, info->target_memkb - info->video_memkb);
+    ents[3] = GCSPRINTF("%"PRId64, info->target_memkb - info->video_memkb
+                        - mem_target_fudge);
     ents[4] = "memory/videoram";
     ents[5] = GCSPRINTF("%"PRId64, info->video_memkb);
     ents[6] = "domid";
@@ -412,9 +419,6 @@ int libxl__build_pv(libxl__gc *gc, uint32_t domid,
         state->console_mfn = xc_dom_p2m_host(dom, dom->console_pfn);
         state->store_mfn = xc_dom_p2m_host(dom, dom->xenstore_pfn);
     }
-
-    libxl__file_reference_unmap(&state->pv_kernel);
-    libxl__file_reference_unmap(&state->pv_ramdisk);
 
     ret = 0;
 out:
@@ -961,7 +965,7 @@ int libxl__domain_suspend_device_model(libxl__gc *gc,
     case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN:
         if (libxl__qmp_stop(gc, domid))
             return ERROR_FAIL;
-		libxl_update_state(CTX, domid, "suspending");
+        libxl_update_state(CTX, domid, "suspending");
         /* Save DM state into filename */
         ret = libxl__qmp_save(gc, domid, filename);
         if (ret)
@@ -1011,7 +1015,9 @@ int libxl__domain_suspend_common_callback(void *user)
         xc_get_hvm_param(CTX->xch, domid, HVM_PARAM_CALLBACK_IRQ, &hvm_pvdrv);
         xc_get_hvm_param(CTX->xch, domid, HVM_PARAM_ACPI_S_STATE, &hvm_s_state);
     }
-	libxl_update_state(CTX, domid, "suspending");
+
+    libxl_update_state(CTX, domid, "suspending");
+    
     if ((hvm_s_state == 0) && (dss->suspend_eventchn >= 0)) {
         LOG(DEBUG, "issuing %s suspend request via event channel",
             dss->hvm ? "PVHVM" : "PV");
@@ -1124,7 +1130,7 @@ int libxl__domain_suspend_common_callback(void *user)
             return 0;
         }
     }
-	libxl_update_state(CTX, domid, "suspended");
+    libxl_update_state(CTX, domid, "suspended");
     return 1;
 }
 
@@ -1388,7 +1394,7 @@ void libxl__xc_domain_save_done(libxl__egc *egc, void *dss_void,
     rc = 0;
 
 out:
-	libxl_update_state(CTX, dss->domid, "suspended");
+    libxl_update_state(CTX, dss->domid, "suspended");
     domain_suspend_done(egc, dss, rc);
 }
 

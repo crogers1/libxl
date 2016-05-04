@@ -99,6 +99,7 @@
 #define STUBDOM_CONSOLE_RESTORE 2
 #define STUBDOM_CONSOLE_SERIAL 3
 #define STUBDOM_SPECIAL_CONSOLES 3
+#define LIBXL_LINUX_STUBDOM_MEM 128
 #define TAP_DEVICE_SUFFIX "-emu"
 #define DISABLE_UDEV_PATH "libxl/disable_udev"
 
@@ -1575,6 +1576,9 @@ _hidden libxl__json_object *libxl__json_parse(libxl__gc *gc_opt, const char *s);
 _hidden int libxl__device_model_version_running(libxl__gc *gc, uint32_t domid);
   /* Return the system-wide default device model */
 _hidden libxl_device_model_version libxl__default_device_model(libxl__gc *gc);
+  /* Based on /libxl/$domid/stubdom-version xenstore key
+   * default is minios */
+_hidden int libxl__stubdomain_version_running(libxl__gc *gc, uint32_t domid);
 
 /* Check how executes hotplug script currently */
 int libxl__hotplug_settings(libxl__gc *gc, xs_transaction_t t);

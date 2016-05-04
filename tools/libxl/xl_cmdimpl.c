@@ -133,7 +133,7 @@ struct domain_create {
     int vncautopass;
     int console_autoconnect;
     const char *config_file;
-    const char *extra_config; /* extra config string */
+    char *extra_config; /* extra config string */
     const char *restore_file;
     int migrate_fd; /* -1 means none */
     char **migration_domname_r; /* from malloc */
@@ -671,8 +671,8 @@ static void parse_config_data(const char *config_source,
     if (!xlu_cfg_get_long (config, "maxvcpus", &l, 0))
         b_info->max_vcpus = l;
 
-	if (!xlu_cfg_get_long (config, "stubdom", &l, 0))
-		b_info->stubdom = l;
+    if (!xlu_cfg_get_long (config, "stubdom", &l, 0))
+        b_info->stubdom = l;
 
     if (!xlu_cfg_get_list (config, "cpus", &cpus, 0, 1)) {
         int n_cpus = 0;
@@ -1202,42 +1202,42 @@ skip_nic:
         fprintf(stderr, "WARNING: vif2: netchannel2 is deprecated and not supported by xl\n");
     }
 
-	//Support adding vkbs by themselves
-	if (!xlu_cfg_get_long (config, "vkb", &vkb_flag, 0)){
-		d_config->num_vkbs = 0;
-		d_config->vkbs = NULL;
-		
-		if (vkb_flag == 1) {
-			for(i = 0; i < 2; i++) {
-				libxl_device_vkb *vkb;
-				fprintf(stderr, "WARNING: init vkb device\n");
-				d_config->vkbs = (libxl_device_vkb *) realloc(d_config->vkbs, sizeof(libxl_device_vkb) * (d_config->num_vkbs + 1));
-				vkb = d_config->vkbs + d_config->num_vkbs;
-				libxl_device_vkb_init(vkb);
-				vkb->devid = d_config->num_vkbs;
-				fprintf(stderr, "WARNING: vkb device of devid %d created.\n", vkb->devid);
-				d_config->num_vkbs++;
-			}
-		}
-	}
-
-	if (!xlu_cfg_get_long (config, "vfb", &vfb_flag, 0)) {
-		d_config->num_vfbs = 0;
-		d_config->vfbs = NULL;
-	
-		if (vfb_flag == 1) {
-			libxl_device_vfb * vfb;
-			fprintf(stderr, "WARNING: init vfb device\n");
-			d_config->vfbs = (libxl_device_vfb *) realloc(d_config->vfbs, sizeof(libxl_device_vfb) * (d_config->num_vfbs + 1));
-			vfb = d_config->vfbs + d_config->num_vfbs;
-			libxl_device_vfb_init(vfb);
-			vfb->devid = d_config->num_vfbs;
-			fprintf(stderr, "WARNING: vfb device of devid %d created.\n", vfb->devid);
-			d_config->num_vfbs++;
-		}	
-	}
-
-    /*if (!xlu_cfg_get_list (config, "vfb", &cvfbs, 0, 0)) {
+    //Support adding vkbs by themselves
+    if (!xlu_cfg_get_long (config, "vkb", &vkb_flag, 0)){
+        d_config->num_vkbs = 0;
+        d_config->vkbs = NULL;
+        
+        if (vfb_flag == 1) {
+            for(i = 0; i < 2; i++) {
+                libxl_device_vkb *vkb;
+                fprintf(stderr, "WARNING: init vkb device\n");
+                d_config->vkbs = (libxl_device_vkb *) realloc(d_config->vkbs, sizeof(libxl_device_vkb) * (d_config->num_vkbs + 1));
+                vkb = d_config->vkbs + d_config->num_vkbs;
+                libxl_device_vkb_init(vkb);
+                vkb->devid = d_config->num_vkbs;
+                fprintf(stderr, "WARNING: vkb device of devid %d created.\n", vkb->devid);
+                d_config->num_vkbs++;
+            }
+        }
+    }
+    
+    if (!xlu_cfg_get_long (config, "vfb", &vfb_flag, 0)) {
+        d_config->num_vfbs = 0;
+        d_config->vfbs = NULL;
+        
+        if (vkb_flag == 1) {
+            libxl_device_vfb * vfb;
+            fprintf(stderr, "WARNING: init vfb device\n");
+            d_config->vfbs = (libxl_device_vfb *) realloc(d_config->vfbs, sizeof(libxl_device_vfb) * (d_config->num_vfbs + 1));
+            vfb = d_config->vfbs + d_config->num_vfbs;
+            libxl_device_vfb_init(vfb);
+            vfb->devid = d_config->num_vfbs;
+            fprintf(stderr, "WARNING: vfb device of devid %d created.\n", vfb->devid);
+            d_config->num_vfbs++;
+        }
+    }
+    
+        /*if (!xlu_cfg_get_list (config, "vfb", &cvfbs, 0, 0)) { 
         d_config->num_vfbs = 0;
         d_config->num_vkbs = 0;
         d_config->vfbs = NULL;
@@ -1301,7 +1301,7 @@ skip_vfb:
             d_config->num_vfbs++;
             d_config->num_vkbs++;
         }
-    }*/
+        } */
 
     if (!xlu_cfg_get_long (config, "pci_msitranslate", &l, 0))
         pci_msitranslate = l;
@@ -1502,18 +1502,19 @@ skip_vfb:
             b_info->u.hvm.vga.kind = l ? LIBXL_VGA_INTERFACE_TYPE_STD :
                                          LIBXL_VGA_INTERFACE_TYPE_CIRRUS;
 
-		if (!xlu_cfg_get_string(config, "dm_display", &buf, 0)) {
-			char *dhstr = "dhqemu";
-			char *surfstr = "surfman";
-			if (!strcmp(buf, dhstr)) {
-				b_info->u.hvm.dm_display.kind = strdup(dhstr);
-			} else if (!strcmp(buf, surfstr)) {
-				b_info->u.hvm.dm_display.kind = strdup(surfstr);
-			} else {
-				fprintf(stderr, "Unknown dm_display \"%s\" specified\n", buf);
-				exit(1);
-			}
-		}
+        if (!xlu_cfg_get_string(config, "dm_display", &buf, 0)) {
+            char *dhstr = "dhqemu";
+            char *surfstr = "surfman";
+            if (!strcmp(buf, dhstr)) {
+                b_info->u.hvm.dm_display.kind = strdup(dhstr);
+            } else if (!strcmp(buf, surfstr)) {
+                b_info->u.hvm.dm_display.kind = strdup(surfstr);
+            } else {
+                fprintf(stderr, "Unknown dm_display \"%s\" specified\n", buf);
+                exit(1);
+            }
+        }
+
         xlu_cfg_get_defbool(config, "vnc", &b_info->u.hvm.vnc.enable, 0);
         xlu_cfg_replace_string (config, "vnclisten",
                                 &b_info->u.hvm.vnc.listen, 0);
@@ -2038,8 +2039,6 @@ static uint32_t create_domain(struct domain_create *dom_info)
 start:
     assert(domid == INVALID_DOMID);
 
-	//libxl_update_state(ctx, domid, "creating-devices");
-
     rc = acquire_lock();
     if (rc < 0)
         goto error_out;
@@ -2075,7 +2074,8 @@ start:
     if ( ret )
         goto error_out;
 
-	libxl_update_state(ctx, domid, "creating-devices");
+    libxl_update_state(ctx, domid, "creating-devices");
+    
     /* If single vcpu to pcpu mapping was requested, honour it */
     if (vcpu_to_pcpu) {
         libxl_bitmap vcpu_cpumap;
@@ -2113,7 +2113,7 @@ start:
 
     release_lock();
 
-	libxl_update_state(ctx, domid, "created");
+    libxl_update_state(ctx, domid, "created");
 
     if (!paused)
         libxl_domain_unpause(ctx, domid);
@@ -2293,7 +2293,7 @@ error_out:
     release_lock();
     if (libxl_domid_valid_guest(domid)) {
         libxl_domain_destroy(ctx, domid, 0);
-		libxl_update_state(ctx, domid, "shutdown");
+        libxl_update_state(ctx, domid, "shutdown");
         domid = INVALID_DOMID;
     }
 
@@ -2968,7 +2968,7 @@ static void shutdown_domain(uint32_t domid,
     int rc;
 
     fprintf(stderr, "Shutting down domain %d\n", domid);
-	libxl_update_state(ctx, domid, "shutdowning");
+    libxl_update_state(ctx, domid, "shutdowning");
     rc=libxl_domain_shutdown(ctx, domid);
     if (rc == ERROR_NOPARAVIRT) {
         if (fallback_trigger) {
@@ -2993,7 +2993,7 @@ static void shutdown_domain(uint32_t domid,
             exit(-1);
         }
     }
-	libxl_update_state(ctx, domid, "shutdown");
+    libxl_update_state(ctx, domid, "shutdown");
 }
 
 static void reboot_domain(uint32_t domid, libxl_evgen_domain_death **deathw,
@@ -4181,11 +4181,25 @@ int main_vm_list(int argc, char **argv)
     return 0;
 }
 
+static void string_realloc_append(char **accumulate, const char *more)
+{
+    /* Appends more to accumulate.  Accumulate is either NULL, or
+     * points (always) to a malloc'd nul-terminated string. */
+
+    size_t oldlen = *accumulate ? strlen(*accumulate) : 0;
+    size_t morelen = strlen(more) + 1/*nul*/;
+    if (oldlen > SSIZE_MAX || morelen > SSIZE_MAX - oldlen) {
+        fprintf(stderr,"Additional config data far too large\n");
+        exit(-ERROR_FAIL);
+    }
+
+    *accumulate = xrealloc(*accumulate, oldlen + morelen);
+    memcpy(*accumulate + oldlen, more, morelen);
+}
+
 int main_create(int argc, char **argv)
 {
     const char *filename = NULL;
-    char *p;
-    char extra_config[1024];
     struct domain_create dom_info;
     int paused = 0, debug = 0, daemonize = 1, console_autoconnect = 0,
         quiet = 0, monitor = 1, vnc = 0, vncautopass = 0;
@@ -4199,6 +4213,8 @@ int main_create(int argc, char **argv)
         COMMON_LONG_OPTS,
         {0, 0, 0, 0}
     };
+
+    dom_info.extra_config = NULL;
 
     if (argv[1] && argv[1][0] != '-' && !strchr(argv[1], '=')) {
         filename = argv[1];
@@ -4239,20 +4255,21 @@ int main_create(int argc, char **argv)
         break;
     }
 
-    extra_config[0] = '\0';
-    for (p = extra_config; optind < argc; optind++) {
+    memset(&dom_info, 0, sizeof(dom_info));
+
+    for (; optind < argc; optind++) {
         if (strchr(argv[optind], '=') != NULL) {
-            p += snprintf(p, sizeof(extra_config) - (p - extra_config),
-                "%s\n", argv[optind]);
+            string_realloc_append(&dom_info.extra_config, argv[optind]);
+            string_realloc_append(&dom_info.extra_config, "\n");
         } else if (!filename) {
             filename = argv[optind];
         } else {
             help("create");
+            free(dom_info.extra_config);
             return 2;
         }
     }
 
-    memset(&dom_info, 0, sizeof(dom_info));
     dom_info.debug = debug;
     dom_info.daemonize = daemonize;
     dom_info.monitor = monitor;
@@ -4260,16 +4277,18 @@ int main_create(int argc, char **argv)
     dom_info.dryrun = dryrun_only;
     dom_info.quiet = quiet;
     dom_info.config_file = filename;
-    dom_info.extra_config = extra_config;
     dom_info.migrate_fd = -1;
     dom_info.vnc = vnc;
     dom_info.vncautopass = vncautopass;
     dom_info.console_autoconnect = console_autoconnect;
 
     rc = create_domain(&dom_info);
-    if (rc < 0)
+    if (rc < 0) {
+        free(dom_info.extra_config);
         return -rc;
+    }
 
+    free(dom_info.extra_config);
     return 0;
 }
 
@@ -4277,8 +4296,7 @@ int main_config_update(int argc, char **argv)
 {
     uint32_t domid;
     const char *filename = NULL;
-    char *p;
-    char extra_config[1024];
+    char *extra_config = NULL;
     void *config_data = 0;
     int config_len = 0;
     libxl_domain_config d_config;
@@ -4313,15 +4331,15 @@ int main_config_update(int argc, char **argv)
         break;
     }
 
-    extra_config[0] = '\0';
-    for (p = extra_config; optind < argc; optind++) {
+    for (; optind < argc; optind++) {
         if (strchr(argv[optind], '=') != NULL) {
-            p += snprintf(p, sizeof(extra_config) - (p - extra_config),
-                "%s\n", argv[optind]);
+            string_realloc_append(&extra_config, argv[optind]);
+            string_realloc_append(&extra_config, "\n");
         } else if (!filename) {
             filename = argv[optind];
         } else {
             help("create");
+            free(extra_config);
             return 2;
         }
     }
@@ -4330,7 +4348,8 @@ int main_config_update(int argc, char **argv)
         rc = libxl_read_file_contents(ctx, filename,
                                       &config_data, &config_len);
         if (rc) { fprintf(stderr, "Failed to read config file: %s: %s\n",
-                           filename, strerror(errno)); return ERROR_FAIL; }
+                           filename, strerror(errno));
+                  free(extra_config); return ERROR_FAIL; }
         if (strlen(extra_config)) {
             if (config_len > INT_MAX - (strlen(extra_config) + 2 + 1)) {
                 fprintf(stderr, "Failed to attach extra configration\n");
@@ -4371,7 +4390,7 @@ int main_config_update(int argc, char **argv)
     libxl_domain_config_dispose(&d_config);
 
     free(config_data);
-
+    free(extra_config);
     return 0;
 }
 
@@ -5442,47 +5461,47 @@ int main_domname(int argc, char **argv)
 
 int main_acpi(int argc, char **argv)
 {
-	int32_t domid; 
-	uint32_t acpi_state;
-	int opt;
-	
-	SWITCH_FOREACH_OPT(opt, "", NULL, "domid", 1) {
-		/* No options */
-	}
-
-	domid = atoi(argv[optind]);
-
-	if (libxl_get_acpi_state(ctx, domid, &acpi_state)) {
-		fprintf(stderr, "Can't get acpi state with domid of '%d', maybe this domain does not exist.\n", domid);
-		return 1;
-	}
-
-	printf("%d\n", acpi_state);
-
-	return 0;
-
+    int32_t domid;
+    uint32_t acpi_state;
+    int opt;
+    
+    SWITCH_FOREACH_OPT(opt, "", NULL, "domid", 1) {
+        /* No options */
+    }
+    
+    domid = atoi(argv[optind]);
+    
+    if (libxl_get_acpi_state(ctx, domid, &acpi_state)) {
+        fprintf(stderr, "Can't get acpi state with domid of '%d', maybe this domain does not exist.\n", domid);
+        return 1;
+    }
+    
+    printf("%d\n", acpi_state);
+    
+    return 0;
+    
 }
 
 int main_uuid(int argc, char **argv)
 {
-	int32_t domid;
-	int opt;
-	char *uuid = NULL;
-	
-	SWITCH_FOREACH_OPT(opt, "", NULL, "uuid", 1) {
-		/* No options */
-	}
-
-	uuid = argv[optind]; 
-
-	if (libxl_uuid_to_domid(ctx, uuid, &domid)){
-		fprintf(stderr, "Can't get domid with domain uuid of '%s', maybe this domain does not exist.\n", uuid);
-		return 1;
-	}
-
-	printf("%d\n", domid);
-
-	return 0;
+    int32_t domid;
+    int opt;
+    char *uuid = NULL;
+    
+    SWITCH_FOREACH_OPT(opt, "", NULL, "uuid", 1) {
+        /* No options */
+    }
+    
+    uuid = argv[optind];
+    
+    if (libxl_uuid_to_domid(ctx, uuid, &domid)){
+        fprintf(stderr, "Can't get domid with domain uuid of '%s', maybe this domain does not exist.\n", uuid);
+        return 1;
+    }
+    
+    printf("%d\n", domid);
+    
+    return 0;
 }
 
 int main_rename(int argc, char **argv)
@@ -6436,7 +6455,7 @@ int main_cpupoolcreate(int argc, char **argv)
 {
     const char *filename = NULL, *config_src=NULL;
     const char *p;
-    char extra_config[1024];
+    char *extra_config = NULL;
     int opt;
     static struct option opts[] = {
         {"defconfig", 1, 0, 'f'},
@@ -6470,13 +6489,10 @@ int main_cpupoolcreate(int argc, char **argv)
         break;
     }
 
-    memset(extra_config, 0, sizeof(extra_config));
     while (optind < argc) {
         if ((p = strchr(argv[optind], '='))) {
-            if (strlen(extra_config) + 1 + strlen(argv[optind]) < sizeof(extra_config)) {
-                strcat(extra_config, "\n");
-                strcat(extra_config, argv[optind]);
-            }
+            string_realloc_append(&extra_config, "\n");
+            string_realloc_append(&extra_config, argv[optind]);
         } else if (!filename) {
             filename = argv[optind];
         } else {

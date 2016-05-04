@@ -166,12 +166,35 @@ int libxl__domain_build_info_setdefault(libxl__gc *gc,
     }
 
     if (b_info->type == LIBXL_DOMAIN_TYPE_HVM &&
-        b_info->device_model_version !=
-            LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN_TRADITIONAL &&
         libxl_defbool_val(b_info->device_model_stubdomain)) {
-        LIBXL__LOG(CTX, XTL_ERROR,
-            "device model stubdomains require \"qemu-xen-traditional\"");
-        return ERROR_INVAL;
+        if (!b_info->stubdomain_version) {
+            switch (b_info->device_model_version) {
+            case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN_TRADITIONAL:
+                b_info->stubdomain_version = LIBXL_STUBDOMAIN_VERSION_MINIOS;
+                break;
+            case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN:
+                b_info->stubdomain_version = LIBXL_STUBDOMAIN_VERSION_LINUX;
+                break;
+            default: abort();
+            }
+        }
+
+        switch (b_info->device_model_version) {
+        case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN_TRADITIONAL:
+            if (b_info->stubdomain_version != LIBXL_STUBDOMAIN_VERSION_MINIOS)
+                {
+                    LIBXL__LOG(CTX, XTL_ERROR, "\"qemu-xen-traditional\" require \"minios\" as stubdomain");
+                    return ERROR_INVAL;
+                }
+            break;
+        case LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN:
+            if (b_info->stubdomain_version != LIBXL_STUBDOMAIN_VERSION_LINUX) {
+                LIBXL__LOG(CTX, XTL_ERROR, "\"qemu-xen\" require \"linux\" as stubdomain");
+                return ERROR_INVAL;
+            }
+            break;
+        default: abort();
+        }
     }
 
     if (!b_info->max_vcpus)
@@ -485,14 +508,14 @@ retry_transaction:
                     libxl__sprintf(gc, "%s/control", dom_path),
                     roperm, ARRAY_SIZE(roperm));
     if (info->type == LIBXL_DOMAIN_TYPE_HVM)
-	{
-        libxl__xs_mkdir(gc, t,
-                        libxl__sprintf(gc, "%s/hvmloader", dom_path),
-                        roperm, ARRAY_SIZE(roperm));
-		libxl__xs_write(gc, t,
-						libxl__sprintf(gc, "%s/hvmloader/seabios-legacy-load-roms", dom_path),
-						"1");
-	}
+        {
+            libxl__xs_mkdir(gc, t,
+                            libxl__sprintf(gc, "%s/hvmloader", dom_path),
+                            roperm, ARRAY_SIZE(roperm));
+            libxl__xs_write(gc, t,
+                            libxl__sprintf(gc, "%s/hvmloader/seabios-legacy-load-roms", dom_path),
+                            "1");
+        }
 
     libxl__xs_mkdir(gc, t,
                     libxl__sprintf(gc, "%s/control/shutdown", dom_path),
@@ -1016,7 +1039,7 @@ static void domcreate_launch_dm(libxl__egc *egc, libxl__multidev *multidev,
     case LIBXL_DOMAIN_TYPE_HVM:
     {
         libxl__device_console console;
-        //libxl_device_vkb vkb;
+        // libxl_device_vkb vkb;
 
         ret = init_console_info(&console, 0);
         if ( ret )
@@ -1041,14 +1064,14 @@ static void domcreate_launch_dm(libxl__egc *egc, libxl__multidev *multidev,
         int need_qemu = 0;
         libxl__device_console console;
 
-		fprintf(stderr, "WARNING: before adding vkb device.\n");
-		for (i = 0; i < d_config->num_vkbs; i++) {
-			fprintf(stderr, "WARNING: adding vkb device.\n");
-			libxl__device_vkb_add(gc, domid, &d_config->vkbs[i]);
-		}
-
+        fprintf(stderr, "WARNING: before adding vkb device.\n");
+        for (i = 0; i < d_config->num_vkbs; i++) {
+            fprintf(stderr, "WARNING: adding vkb device.\n");
+            libxl__device_vkb_add(gc, domid, &d_config->vkbs[i]);
+        }
+        
         for (i = 0; i < d_config->num_vfbs; i++) {
-			fprintf(stderr, "WARNING: adding vkb device.\n");
+            fprintf(stderr, "WARNING: adding vkb device.\n");
             libxl__device_vfb_add(gc, domid, &d_config->vfbs[i]);
             //libxl__device_vkb_add(gc, domid, &d_config->vkbs[i]);
         }
@@ -1057,10 +1080,10 @@ static void domcreate_launch_dm(libxl__egc *egc, libxl__multidev *multidev,
         if ( ret )
             goto error_out;
 
-        //need_qemu = libxl__need_xenpv_qemu(gc, 1, &console,
+        //        need_qemu = libxl__need_xenpv_qemu(gc, 1, &console,
         //        d_config->num_vfbs, d_config->vfbs,
         //        d_config->num_disks, &d_config->disks[0]);
-		need_qemu = false;
+        need_qemu = false;
 
         console.backend_domid = state->console_domid;
         libxl__device_console_add(gc, domid, &console, state);
@@ -1108,7 +1131,12 @@ static void domcreate_devmodel_started(libxl__egc *egc,
     if (dcs->dmss.dm.guest_domid) {
         if (d_config->b_info.device_model_version
             == LIBXL_DEVICE_MODEL_VERSION_QEMU_XEN) {
-            libxl__qmp_initializations(gc, domid, d_config);
+            if (!libxl_defbool_val(d_config->b_info.device_model_stubdomain)) {
+                libxl__qmp_initializations(gc, domid, d_config);
+            } else {
+                int stubdom_domid = dcs->dmss.pvqemu.guest_domid;
+                libxl__qmp_initializations(gc, stubdom_domid, d_config);
+            }
         }
     }
 
@@ -1209,6 +1237,9 @@ static void domcreate_complete(libxl__egc *egc,
 {
     STATE_AO_GC(dcs->ao);
     libxl_domain_config *const d_config = dcs->guest_config;
+
+    libxl__file_reference_unmap(&dcs->build_state.pv_kernel);
+    libxl__file_reference_unmap(&dcs->build_state.pv_ramdisk);
 
     if (!rc && d_config->b_info.exec_ssidref)
         rc = xc_flask_relabel_domain(CTX->xch, dcs->guest_domid, d_config->b_info.exec_ssidref);
