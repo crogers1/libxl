@@ -500,13 +500,13 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
      * If we're running displayhandler, we need to add usb devices to support
      * seamless and absolute events
      */
-	if (display) {
-		if (!strcmp(display->kind,"dhqemu")) {
-			flexarray_append_pair(dm_args, "-device", "usb-ehci,id=ehci");
-			flexarray_append_pair(dm_args, "-device", "usb-tablet,bus=ehci.0");
-		}
-	}
-
+    if (display) {
+        if (!strcmp(display->kind,"dhqemu")) {
+            flexarray_append_pair(dm_args, "-device", "usb-ehci,id=ehci");
+            flexarray_append_pair(dm_args, "-device", "usb-tablet,bus=ehci.0");
+        }
+    }
+    
     if (sdl) {
         flexarray_append(dm_args, "-sdl");
         /* XXX sdl->{display,xauthority} into $DISPLAY/$XAUTHORITY */
@@ -715,10 +715,10 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
                     drive = libxl__sprintf
                         (gc, "if=ide,index=%d,readonly=%s,media=cdrom,cache=writeback,id=ide-%i",
                          disk, disks[i].readwrite ? "off" : "on", dev_number);
-                else if (b_info->stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX)
-                    drive = libxl__sprintf
-                        (gc, "file=%s,if=ide,index=%d,media=cdrom,cache=writeback,format=%s,id=ide-%i",
-                         "/dev/xvdc", disk, "host_cdrom", dev_number);
+                //else if (b_info->stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX)
+                //    drive = libxl__sprintf
+                //        (gc, "file=%s,if=ide,index=%d,media=cdrom,cache=writeback,format=%s,id=ide-%i",
+                //                         "/dev/xvdc", disk, "host_cdrom", dev_number);
                 else
                     drive = libxl__sprintf
                         (gc, "file=%s,if=ide,index=%d,readonly=%s,media=cdrom,format=%s,cache=writeback,id=ide-%i",
@@ -752,11 +752,11 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
                         (gc, "file=%s,if=scsi,bus=0,unit=%d,format=%s,cache=writeback",
                          disks[i].pdev_path, disk, format);
                 else if (disk < 4) {
-                    if (b_info->stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX)
-                        drive = libxl__sprintf
-                            (gc, "file=%s,if=ide,index=%d,media=disk,cache=writeback,format=%s",
-                             "/dev/xvda", disk, "host_device");
-                    else
+                    //if (b_info->stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX)
+                    //    drive = libxl__sprintf
+                    //        (gc, "file=%s,if=ide,index=%d,media=disk,cache=writeback,format=%s",
+                    //         "/dev/xvda", disk, "host_device");
+                    //else
                         drive = libxl__sprintf
                             (gc, "file=%s,if=ide,index=%d,media=disk,format=%s,cache=writeback",
                              disks[i].pdev_path, disk, format);
@@ -1016,21 +1016,22 @@ void libxl__spawn_stub_dm(libxl__egc *egc, libxl__stub_dm_spawn_state *sdss)
         stubdom_state->pv_ramdisk.path = "";
         break;
     case LIBXL_STUBDOMAIN_VERSION_LINUX:
-        libxl_device_disk_init(&disk_stub);
-        disk_stub.readwrite = 0;
-        disk_stub.format = LIBXL_DISK_FORMAT_RAW;
-        disk_stub.is_cdrom = 0;
-        disk_stub.vdev = "xvdz";
-        disk_stub.pdev_path = libxl__abs_path(gc, "stubdom-disk.img",
-                                              libxl__xenfirmwaredir_path());
-        ret = libxl__device_disk_setdefault(gc, &disk_stub);
-        if (ret) goto out;
+        //libxl_device_disk_init(&disk_stub);
+        //disk_stub.readwrite = 0;
+        //disk_stub.format = LIBXL_DISK_FORMAT_RAW;
+        //disk_stub.is_cdrom = 0;
+        //disk_stub.vdev = "xvdz";
+        //disk_stub.pdev_path = libxl__abs_path(gc, "stubdom-disk.img",
+        //                                      libxl__xenfirmwaredir_path());
+        //ret = libxl__device_disk_setdefault(gc, &disk_stub);
+        //if (ret) goto out;
         stubdom_state->pv_kernel.path
             = libxl__abs_path(gc, "vmlinuz-stubdom",
                               libxl__xenfirmwaredir_path());
         stubdom_state->pv_cmdline
-            = "debug console=hvc0 root=/dev/xvdz ro init=/init";
-        stubdom_state->pv_ramdisk.path = "";
+            = "debug console=hvc0 ro init=/init";
+        stubdom_state->pv_ramdisk.path = libxl__abs_path(gc, "stubdomain-initramfs",
+                                                         libxl__xenfirmwaredir_path());
         break;
     default:
         abort();
@@ -1101,10 +1102,10 @@ retry_transaction:
 
     libxl__multidev_begin(ao, &sdss->multidev);
     sdss->multidev.callback = spawn_stub_launch_dm;
-    if (guest_config->b_info.stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX) {
-        libxl__ao_device *aodev = libxl__multidev_prepare(&sdss->multidev);
-        libxl__device_disk_add(egc, dm_domid, &disk_stub, aodev);
-    }
+    //    if (guest_config->b_info.stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX) {
+    //    libxl__ao_device *aodev = libxl__multidev_prepare(&sdss->multidev);
+    //    libxl__device_disk_add(egc, dm_domid, &disk_stub, aodev);
+    //}
     libxl__add_disks(egc, ao, dm_domid, dm_config, &sdss->multidev);
     libxl__multidev_prepared(egc, &sdss->multidev, 0);
 
