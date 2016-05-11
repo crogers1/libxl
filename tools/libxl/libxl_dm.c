@@ -500,10 +500,12 @@ static char ** libxl__build_device_model_args_new(libxl__gc *gc,
      * If we're running displayhandler, we need to add usb devices to support
      * seamless and absolute events
      */
-    if (!strcmp(display->kind,"dhqemu")) {
-        flexarray_append_pair(dm_args, "-device", "usb-ehci,id=ehci");
-        flexarray_append_pair(dm_args, "-device", "usb-tablet,bus=ehci.0");
-    }
+	if (display) {
+		if (!strcmp(display->kind,"dhqemu")) {
+			flexarray_append_pair(dm_args, "-device", "usb-ehci,id=ehci");
+			flexarray_append_pair(dm_args, "-device", "usb-tablet,bus=ehci.0");
+		}
+	}
 
     if (sdl) {
         flexarray_append(dm_args, "-sdl");
